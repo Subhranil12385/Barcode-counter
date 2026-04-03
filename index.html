@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ScanCount</title>
+<style>
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --card: #f0f1f4;
+  --accent: #0066ff;
+  --accent2: #ff3b30;
+  --accent3: #34c759;
+  --text: #0d0d0d;
+  --muted: #8e8e9a;
+  --border: rgba(0,0,0,0.09);
+  --shadow: 0 2px 12px rgba(0,0,0,0.10);
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 10;
+  flex-shrink: 0;
+}
+.logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); }
+.logo span { color: var(--text); }
+
+.mode-toggle {
+  display: flex;
+  background: var(--card);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid var(--border);
+}
+.mode-btn {
+  padding: 6px 18px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+}
+.mode-btn.active { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(0,102,255,0.3); }
+.mode-btn.active.diff { background: var(--accent3); box-shadow: 0 2px 8px rgba(52,199,89,0.3); }
+
+/* CAMERA */
+.cam-wrap {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: #000;
+}
+#video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Scan line */
+.scan-line {
+  position: absolute;
+  left: 6%; right: 6%;
+  height: 2.5px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px rgba(0,102,255,0.8);
+  animation: scanline 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes scanline {
+  0%   { top:12%; opacity:0; }
+  8%   { opacity:1; }
+  92%  { opacity:1; }
+  100% { top:88%; opacity:0; }
+}
+
+/* Flash */
+.flash-anim {
+  position: absolute; inset:0;
+  background: rgba(255,255,255,0.5);
+  opacity:0; pointer-events:none;
+  transition: opacity 0.05s;
+}
+.flash-anim.show { opacity:1; }
+
+/* Status */
+.status-bar {
+  position: absolute; top:10px; left:10px;
+  display: flex; align-items:center; gap:6px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 5px 11px;
+  pointer-events: none;
+}
+.status-dot { width:7px; height:7px; border-radius:50%; background:var(--accent3); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.status-text { font-size:11px; color:rgba(255,255,255,0.9); font-weight:600; }
+
+/* Controls */
+.cam-controls {
+  position: absolute; top:10px; right:10px;
+  display: flex; flex-direction:column; gap:8px;
+}
+.ctrl-btn {
+  width:44px; height:44px;
+  border-radius:50%;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:18px; color:#fff;
+  transition: all 0.18s;
+}
+.ctrl-btn.on { border-color:#FFD60A; color:#FFD60A; background:rgba(255,214,10,0.15); }
+.ctrl-btn:active { transform:scale(0.88); }
+
+/* Sliders */
+.sliders-panel {
+  position: absolute; bottom:0; left:0; right:0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(16px);
+  padding: 10px 14px 14px;
+  display: flex; flex-direction:column; gap:9px;
+}
+.slider-row { display:flex; align-items:center; gap:10px; }
+.slider-icon { font-size:15px; flex-shrink:0; }
+.slider-track {
+  -webkit-appearance:none; flex:1;
+  height:4px; border-radius:2px;
+  background: rgba(255,255,255,0.25); outline:none;
+}
+.slider-track::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:20px; height:20px; border-radius:50%;
+  background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.4); cursor:pointer;
+}
+.slider-val { font-size:11px; color:rgba(255,255,255,0.85); min-width:40px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* Badge */
+.badge-container {
+  position:absolute; top:12%; left:50%; transform:translateX(-50%);
+  display:flex; flex-wrap:wrap; gap:4px; justify-content:center;
+  max-width:88%; pointer-events:none;
+}
+.scan-badge {
+  background: rgba(0,0,0,0.8);
+  border: 2px solid var(--accent3);
+  color:#fff; font-size:11px; padding:4px 12px;
+  border-radius:20px; font-weight:700;
+  animation: badgePop 1s forwards;
+  max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+@keyframes badgePop {
+  0%  {opacity:0;transform:scale(0.75) translateY(6px);}
+  15% {opacity:1;transform:scale(1.05) translateY(0);}
+  70% {opacity:1;}
+  100%{opacity:0;transform:translateY(-18px) scale(0.9);}
+}
+
+/* Focus ring */
+.focus-ring {
+  position:absolute; width:56px; height:56px;
+  border:2.5px solid #FFD60A; border-radius:4px;
+  pointer-events:none; transform:translate(-50%,-50%);
+  animation: focusAnim 0.7s forwards; display:none;
+}
+@keyframes focusAnim {
+  0%  {opacity:1;transform:translate(-50%,-50%) scale(1.4);}
+  60% {opacity:1;transform:translate(-50%,-50%) scale(1);}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(0.95);}
+}
+
+/* COUNT */
+.count-section {
+  flex-shrink:0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 10px;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+}
+.count-main { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.count-number {
+  font-size:60px; font-weight:900; line-height:1;
+  color:var(--accent); letter-spacing:-3px;
+  transition: transform 0.1s;
+  font-variant-numeric: tabular-nums;
+}
+.count-number.bump { transform:scale(1.13); }
+.count-number.diff-mode { color:var(--accent3); }
+.count-info { text-align:right; }
+.count-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; font-weight:600; }
+.count-mode-badge {
+  font-size:11px; font-weight:700;
+  color:var(--accent);
+  background:rgba(0,102,255,0.1);
+  border-radius:6px; padding:3px 10px; margin-top:4px;
+  display:inline-block; border:1px solid rgba(0,102,255,0.2);
+}
+.count-mode-badge.diff-mode { color:var(--accent3); background:rgba(52,199,89,0.1); border-color:rgba(52,199,89,0.2); }
+
+/* Target */
+.target-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; min-height:30px; }
+.target-label { font-size:10px; color:var(--muted); font-weight:700; letter-spacing:0.5px; flex-shrink:0; }
+.target-code {
+  font-size:12px; color:var(--accent);
+  background:rgba(0,102,255,0.07);
+  border:1px solid rgba(0,102,255,0.15);
+  border-radius:6px; padding:5px 10px;
+  flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;
+}
+.target-clear {
+  width:28px; height:28px; border-radius:50%;
+  background:rgba(255,59,48,0.1); border:1px solid rgba(255,59,48,0.25);
+  color:var(--accent2); font-size:16px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex-shrink:0; font-weight:700;
+}
+
+/* Bottom */
+.bottom-row { display:flex; gap:8px; }
+.action-btn {
+  flex:1; padding:11px; border-radius:10px; border:none;
+  font-size:12px; font-weight:700; cursor:pointer;
+  transition:all 0.15s; font-family:inherit;
+}
+.action-btn:active { transform:scale(0.97); }
+.btn-reset { background:rgba(255,59,48,0.1); color:var(--accent2); border:1px solid rgba(255,59,48,0.2); }
+.btn-list  { background:var(--card); color:var(--text); border:1px solid var(--border); }
+
+/* SHEET */
+.sheet {
+  position:fixed; inset:0; z-index:100;
+  display:flex; flex-direction:column;
+  background:var(--bg);
+  transform:translateY(100%);
+  transition:transform 0.3s cubic-bezier(0.32,0.72,0,1);
+}
+.sheet.open { transform:translateY(0); }
+.sheet-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 16px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface); box-shadow:var(--shadow);
+}
+.sheet-title { font-size:15px; font-weight:800; color:var(--text); }
+.sheet-close {
+  width:30px; height:30px; border-radius:50%;
+  background:var(--card); border:1px solid var(--border);
+  color:var(--muted); font-size:18px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-weight:700;
+}
+.sheet-body { flex:1; overflow-y:auto; padding:10px 14px; }
+.item-row {
+  display:flex; align-items:center;
+  padding:12px 14px; background:var(--surface);
+  border-radius:12px; margin-bottom:6px;
+  border:1px solid var(--border); gap:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,0.05);
+  animation:slideIn 0.2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.item-code { font-size:13px; color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+.item-bar { height:3px; background:linear-gradient(90deg,var(--accent),rgba(0,102,255,0.1)); border-radius:2px; margin-top:5px; transition:width 0.3s; }
+.item-bar.green { background:linear-gradient(90deg,var(--accent3),rgba(52,199,89,0.1)); }
+.item-count { font-size:24px; font-weight:900; color:var(--accent); min-width:40px; text-align:right; font-variant-numeric:tabular-nums; }
+.item-count.green { color:var(--accent3); }
+.no-items { text-align:center; color:var(--muted); font-size:13px; padding:50px 20px; font-weight:500; }
+
+.no-cam {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; color:rgba(255,255,255,0.7); font-size:13px; background:#111;
+}
+.start-btn {
+  padding:12px 32px; background:var(--accent); color:#fff;
+  border:none; border-radius:10px; font-size:14px; font-weight:700;
+  cursor:pointer; font-family:inherit;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Scan<span>Count</span></div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="btnSame" onclick="setMode('same')">SAME</button>
+    <button class="mode-btn diff" id="btnDiff" onclick="setMode('diff')">DIFF</button>
+  </div>
+</div>
+
+<div class="cam-wrap" id="camWrap">
+  <video id="video" playsinline muted autoplay></video>
+  <div class="scan-line"></div>
+  <div class="flash-anim" id="flashAnim"></div>
+
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <div class="status-text" id="statusText">STARTING</div>
+  </div>
+
+  <div class="cam-controls">
+    <div class="ctrl-btn" id="torchBtn" onclick="toggleTorch()">🔦</div>
+    <div class="ctrl-btn" onclick="switchCamera()">🔄</div>
+  </div>
+
+  <div class="badge-container" id="badgeContainer"></div>
+  <div class="focus-ring" id="focusRing"></div>
+
+  <div class="sliders-panel">
+    <div class="slider-row">
+      <span class="slider-icon">🔍</span>
+      <input type="range" class="slider-track" id="zoomSlider" min="1" max="5" step="0.1" value="1" oninput="applyZoom(this.value)">
+      <span class="slider-val" id="zoomLabel">1.0×</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-icon">☀️</span>
+      <input type="range" class="slider-track" id="expSlider" min="-4" max="4" step="0.5" value="0" oninput="applyExposure(this.value)">
+      <span class="slider-val" id="expLabel">0 EV</span>
+    </div>
+  </div>
+
+  <div class="no-cam" id="noCam" style="display:none">
+    <div style="font-size:40px">📷</div>
+    <span>Camera not available</span>
+    <button class="start-btn" onclick="startCamera()">START CAMERA</button>
+  </div>
+</div>
+
+<div class="count-section">
+  <div class="count-main">
+    <div class="count-number" id="countNum">0</div>
+    <div class="count-info">
+      <div class="count-label" id="countLabel">ITEMS SCANNED</div>
+      <div class="count-mode-badge" id="modeBadge">SAME MODE</div>
+    </div>
+  </div>
+  <div class="target-row" id="targetRow">
+    <span class="target-label">TARGET</span>
+    <div class="target-code" id="targetCode">Scan first barcode to set target…</div>
+    <div class="target-clear" id="clearBtn" onclick="clearTarget()" style="display:none">×</div>
+  </div>
+  <div class="bottom-row">
+    <button class="action-btn btn-reset" onclick="resetAll()">↺ Reset</button>
+    <button class="action-btn btn-list" onclick="openSheet()">☰ Details</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="sheet-header">
+    <span class="sheet-title" id="sheetTitle">Scan Log</span>
+    <div class="sheet-close" onclick="closeSheet()">×</div>
+  </div>
+  <div class="sheet-body" id="sheetBody"><div class="no-items">No scans yet</div></div>
+</div>
+
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────
+let mode = 'same', targetCode = null, sameCount = 0, diffMap = {};
+let stream = null, track = null, torchOn = false, facingMode = 'environment';
+let scanning = false, animFrame = null;
+let lastScanned = {};
+const THROTTLE = 1200;
+
+// ── Mode ───────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m; resetAll();
+  document.getElementById('btnSame').classList.toggle('active', m==='same');
+  document.getElementById('btnDiff').classList.toggle('active', m==='diff');
+  document.getElementById('targetRow').style.display = m==='same' ? 'flex' : 'none';
+  const badge = document.getElementById('modeBadge');
+  const num = document.getElementById('countNum');
+  badge.textContent = m==='same' ? 'SAME MODE' : 'DIFF MODE';
+  badge.classList.toggle('diff-mode', m==='diff');
+  num.classList.toggle('diff-mode', m==='diff');
+  document.getElementById('countLabel').textContent = m==='same' ? 'ITEMS SCANNED' : 'UNIQUE CODES';
+}
+
+// ── Handle code ────────────────────────────────────────────────
+function handleCode(text) {
+  if (!text || text.trim()==='') return;
+  const now = Date.now();
+  if (now - (lastScanned[text]||0) < THROTTLE) return;
+  lastScanned[text] = now;
+  let counted = false;
+  if (mode==='same') {
+    if (!targetCode) {
+      targetCode = text;
+      document.getElementById('targetCode').textContent = text;
+      document.getElementById('clearBtn').style.display = 'flex';
+    }
+    if (text===targetCode) { sameCount++; counted=true; }
+  } else {
+    diffMap[text] = (diffMap[text]||0)+1; counted=true;
+  }
+  if (counted) { updateCount(); doFlash(); showBadge(text); renderSheet(); }
+}
+
+function updateCount() {
+  const el = document.getElementById('countNum');
+  el.textContent = mode==='same' ? sameCount : Object.keys(diffMap).length;
+  el.classList.add('bump');
+  setTimeout(() => el.classList.remove('bump'), 130);
+}
+
+function doFlash() {
+  const f = document.getElementById('flashAnim');
+  f.classList.add('show');
+  setTimeout(() => f.classList.remove('show'), 80);
+}
+
+function showBadge(text) {
+  const c = document.getElementById('badgeContainer');
+  const b = document.createElement('div');
+  b.className = 'scan-badge';
+  b.textContent = text.length>28 ? text.slice(0,28)+'…' : text;
+  c.appendChild(b);
+  setTimeout(() => b.remove(), 1050);
+}
+
+// ── Camera ─────────────────────────────────────────────────────
+async function startCamera() {
+  document.getElementById('noCam').style.display = 'none';
+  document.getElementById('statusText').textContent = 'STARTING';
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width:{ideal:1920}, height:{ideal:1080} }
+    });
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.zoom) {
+      const s = document.getElementById('zoomSlider');
+      s.min=caps.zoom.min; s.max=caps.zoom.max; s.step=caps.zoom.step||0.1;
+      s.value=caps.zoom.min;
+      document.getElementById('zoomLabel').textContent = parseFloat(caps.zoom.min).toFixed(1)+'×';
+    }
+    if (caps.exposureCompensation) {
+      const e = document.getElementById('expSlider');
+      e.min=caps.exposureCompensation.min; e.max=caps.exposureCompensation.max;
+      e.step=caps.exposureCompensation.step||0.5; e.value=0;
+    }
+    await video.play();
+    document.getElementById('statusText').textContent = 'SCANNING';
+    startScanning();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('noCam').style.display='flex';
+    document.getElementById('statusText').textContent='ERROR';
+  }
+}
+
+// ── Decode loop ────────────────────────────────────────────────
+let offCanvas, offCtx;
+
+function startScanning() {
+  if (scanning) return;
+  scanning = true;
+  offCanvas = document.createElement('canvas');
+  offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+  const video = document.getElementById('video');
+
+  // Build ZXing readers
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+    ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.DATA_MATRIX,
+    ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.CODABAR,
+    ZXing.BarcodeFormat.CODE_93, ZXing.BarcodeFormat.PDF_417,
+    ZXing.BarcodeFormat.AZTEC
+  ]);
+  const sfReader = new ZXing.MultiFormatReader();
+  sfReader.setHints(hints);
+
+  // Multi reader
+  let multiReader = null;
+  try {
+    multiReader = new ZXing.GenericMultipleBarcodeReader(sfReader);
+  } catch(e) { multiReader = null; }
+
+  function tick() {
+    if (!scanning) return;
+    if (video.readyState >= 2 && video.videoWidth > 0) {
+      const W = video.videoWidth, H = video.videoHeight;
+      offCanvas.width = W; offCanvas.height = H;
+      offCtx.drawImage(video, 0, 0, W, H);
+      try {
+        const imgData = offCtx.getImageData(0, 0, W, H);
+        const lum = new ZXing.RGBLuminanceSource(imgData.data, W, H);
+        const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+
+        let decoded = false;
+        // Try multi-barcode decode
+        if (multiReader) {
+          try {
+            const results = multiReader.decodeMultiple(bitmap);
+            if (results && results.length > 0) {
+              results.forEach(r => handleCode(r.getText()));
+              decoded = true;
+            }
+          } catch(e) {}
+        }
+        // Fallback: single decode
+        if (!decoded) {
+          try {
+            const r = sfReader.decode(bitmap);
+            if (r) handleCode(r.getText());
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+    animFrame = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function stopScanning() {
+  scanning = false;
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+}
+
+// ── Torch ──────────────────────────────────────────────────────
+async function toggleTorch() {
+  if (!track) return;
+  torchOn = !torchOn;
+  try {
+    await track.applyConstraints({ advanced:[{ torch: torchOn }] });
+    document.getElementById('torchBtn').classList.toggle('on', torchOn);
+  } catch(e) { torchOn=false; alert('Torch not supported on this device.'); }
+}
+
+// ── Zoom ───────────────────────────────────────────────────────
+async function applyZoom(val) {
+  const v = parseFloat(val);
+  document.getElementById('zoomLabel').textContent = v.toFixed(1)+'×';
+  if (!track) return;
+  try { await track.applyConstraints({ advanced:[{ zoom: v }] }); } catch(e) {}
+}
+
+// ── Exposure ───────────────────────────────────────────────────
+async function applyExposure(val) {
+  const v = parseFloat(val);
+  document.getElementById('expLabel').textContent = (v>=0?'+':'')+v+' EV';
+  if (!track) return;
+  try { await track.applyConstraints({ advanced:[{ exposureMode:'manual', exposureCompensation: v }] }); }
+  catch(e) { try { await track.applyConstraints({ advanced:[{ exposureCompensation: v }] }); } catch(e2){} }
+}
+
+// ── Switch camera ──────────────────────────────────────────────
+async function switchCamera() {
+  facingMode = facingMode==='environment' ? 'user' : 'environment';
+  stopScanning();
+  await startCamera();
+}
+
+// ── Tap focus ──────────────────────────────────────────────────
+document.getElementById('camWrap').addEventListener('click', async (e) => {
+  if (e.target.closest('.ctrl-btn') || e.target.closest('.sliders-panel')) return;
+  const ring = document.getElementById('focusRing');
+  ring.style.left = e.clientX+'px'; ring.style.top = e.clientY+'px';
+  ring.style.display='block'; ring.style.animation='none';
+  void ring.offsetHeight; ring.style.animation='focusAnim 0.7s forwards';
+  setTimeout(()=>ring.style.display='none', 720);
+  if (track) {
+    try {
+      const rect = document.getElementById('camWrap').getBoundingClientRect();
+      const x = (e.clientX-rect.left)/rect.width, y = (e.clientY-rect.top)/rect.height;
+      await track.applyConstraints({ advanced:[{ focusMode:'manual', pointsOfInterest:[{x,y}] }] });
+      setTimeout(async()=>{ try{ await track.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch(e){} }, 2000);
+    } catch(e) {}
+  }
+});
+
+// ── Clear / Reset ──────────────────────────────────────────────
+function clearTarget() {
+  targetCode=null; sameCount=0; lastScanned={};
+  document.getElementById('targetCode').textContent='Scan first barcode to set target…';
+  document.getElementById('clearBtn').style.display='none';
+  document.getElementById('countNum').textContent='0';
+  renderSheet();
+}
+
+function resetAll() {
+  sameCount=0; diffMap={}; targetCode=null; lastScanned={};
+  document.getElementById('targetCode').textContent='Scan first barcode to set target…';
+  document.getElementById('clearBtn').style.display='none';
+  document.getElementById('countNum').textContent='0';
+  renderSheet();
+}
+
+// ── Sheet ──────────────────────────────────────────────────────
+function openSheet() { renderSheet(); document.getElementById('sheet').classList.add('open'); }
+function closeSheet() { document.getElementById('sheet').classList.remove('open'); }
+
+function renderSheet() {
+  const body = document.getElementById('sheetBody');
+  if (mode==='same') {
+    document.getElementById('sheetTitle').textContent='Target Count';
+    if (!targetCode) { body.innerHTML='<div class="no-items">No target set yet</div>'; return; }
+    body.innerHTML=`<div class="item-row">
+      <div style="flex:1;overflow:hidden">
+        <div class="item-code">${esc(targetCode)}</div>
+        <div class="item-sub">Target barcode</div>
+        <div class="item-bar" style="width:100%"></div>
+      </div>
+      <div class="item-count">${sameCount}</div>
+    </div>`;
+  } else {
+    document.getElementById('sheetTitle').textContent='All Barcodes';
+    const entries = Object.entries(diffMap).sort((a,b)=>b[1]-a[1]);
+    if (!entries.length) { body.innerHTML='<div class="no-items">No scans yet</div>'; return; }
+    const max = Math.max(...entries.map(e=>e[1]));
+    body.innerHTML = entries.map(([code,cnt])=>`<div class="item-row">
+      <div style="flex:1;overflow:hidden">
+        <div class="item-code">${esc(code)}</div>
+        <div class="item-sub">Scanned ${cnt} time${cnt>1?'s':''}</div>
+        <div class="item-bar green" style="width:${Math.round(cnt/max*100)}%"></div>
+      </div>
+      <div class="item-count green">${cnt}</div>
+    </div>`).join('');
+  }
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Init ───────────────────────────────────────────────────────
+window.addEventListener('load', startCamera);
+document.addEventListener('visibilitychange', ()=>{
+  if (document.visibilityState==='visible' && !scanning) startCamera();
+});
+</script>
+</body>
+</html>
